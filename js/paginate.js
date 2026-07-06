@@ -122,58 +122,89 @@
     }
   }
 
-// A downward drag at the top of the page is ambiguous to the browser:
-    // it's both "go to the previous page" (our gesture) and the trigger
-    // for native pull-to-refresh, since #pager never scrolls natively and
-    // so the browser sees an overscroll. Left alone, the browser wins and
-    // refreshing the tab eats the gesture before onTouchEnd ever sees it —
-    // scrolling up becomes impossible. The fix: as soon as a touch's
-    // movement is clearly more vertical than horizontal, preventDefault on
-    // every touchmove for that gesture. That suppresses the browser's own
-    // scroll/refresh handling for it entirely, which is correct here
-    // because the pager already owns 100% of vertical navigation — there
-    // is no legitimate vertical native-scroll case left to preserve.
-    // Horizontal drags (the card carousels' swipe) are left untouched so
-    // they keep scrolling normally.
+  // A downward drag at the top of the page is the same physical gesture
+    // as native pull-to-refresh (finger drags the content down from the
+    // very top) AND our own "go to previous page" gesture. Earlier this
+    // suppressed native refresh entirely for every vertical drag, which
+    // fixed the "can't scroll up" bug but also killed pull-to-refresh
+    // completely. What we actually want is for the two to coexist the way
+    // a normal page does: a light pull does nothing disruptive, a hard
+    // sustained pull refreshes.
+    //
+    // Fighting the browser mid-gesture doesn't work reliably - once a
+    // touchmove has been preventDefault'd, browsers stop honoring native
+    // overscroll for the rest of that same touch sequence even if a later
+    // event isn't prevented. So the decision has to be made once, right
+    // when the gesture direction locks in, not adjusted based on distance
+    // as the drag continues.
+    //
+    // The gesture is only genuinely ambiguous with refresh when we're
+    // already on the first page and dragging downward - that's the only
+    // place a pull can reach the top with nowhere left for our own paging
+    // to go. In that one case we never call preventDefault at all and let
+    // the browser own the whole gesture: a small pull just rubber-bands
+    // back (our page-nav would have been a no-op here anyway, since
+    // goTo(current - 1) already clamps at 0), and a hard pull triggers a
+    // real refresh, exactly like any other page. Every other vertical drag
+    // (mid-pager, or dragging upward from the first page) keeps using our
+    // own preventDefault + paging, since there's no legitimate native
+    // scroll there for the browser to fight us over.
     var touchStartX = null;
     var touchStartY = null;
     var touchDirection = null; // 'vertical' | 'horizontal' | null
+    var pageAtTouchStart = 0;
+    var isPullToRefreshGesture = false;
 
-    function onTouchStart(e) {
-          touchStartX = e.touches[0].clientX;
-          touchStartY = e.touches[0].clientY;
-          touchDirection = null;
-    }
+      function onTouchStart(e) {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            touchDirection = null;
+            pageAtTouchStart = current;
+            isPullToRefreshGesture = false;
+      }
 
-    function onTouchMove(e) {
-          if (touchStartY === null) return;
-          var t = e.touches[0];
-          var dx = t.clientX - touchStartX;
-          var dy = t.clientY - touchStartY;
+      function onTouchMove(e) {
+            if (touchStartY === null) return;
+            var t = e.touches[0];
+            var dx = t.clientX - touchStartX;
+            var dy = t.clientY - touchStartY;
 
-          if (touchDirection === null) {
-                  if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-                  touchDirection = Math.abs(dy) > Math.abs(dx) ? "vertical" : "horizontal";
-          }
+            if (touchDirection === null) {
+                    // Wait for enough movement to tell a swipe from a tap, and to
+                    // tell vertical intent from horizontal before locking a direction.
+                    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+                    touchDirection = Math.abs(dy) > Math.abs(dx) ? "vertical" : "horizontal";
+                    if (touchDirection === "vertical") {
+                              isPullToRefreshGesture = pageAtTouchStart === 0 && dy > 0;
+                    }
+            }
 
-          if (touchDirection === "vertical" && e.cancelable) {
-                  e.preventDefault();
-          }
-    }
+            if (touchDirection === "vertical" && !isPullToRefreshGesture && e.cancelable) {
+                    e.preventDefault();
+            }
+      }
 
-    function onTouchEnd(e) {
-          var direction = touchDirection;
-          var startY = touchStartY;
-          touchStartX = null;
-          touchStartY = null;
-          touchDirection = null;
+      function onTouchEnd(e) {
+            var direction = touchDirection;
+            var startY = touchStartY;
+            var wasRefreshGesture = isPullToRefreshGesture;
+            touchStartX = null;
+            touchStartY = null;
+            touchDirection = null;
+            isPullToRefreshGesture = false;
 
-          if (startY === null || isAnimating || direction !== "vertical") return;
-          var dy = startY - e.changedTouches[0].clientY;
-          if (Math.abs(dy) < 60) return; // ignore small taps/drags
-          if (dy > 0) goTo(current + 1);
-          else goTo(current - 1);
-    }
+            if (
+                    startY === null ||
+                    isAnimating ||
+                    direction !== "vertical" ||
+                    wasRefreshGesture
+                  )
+                    return;
+            var dy = startY - e.changedTouches[0].clientY;
+            if (Math.abs(dy) < 60) return; // ignore small taps/drags
+            if (dy > 0) goTo(current + 1);
+            else goTo(current - 1);
+      }
 
   window.addEventListener("wheel", onWheel, { passive: false });
   window.addEventListener("keydown", onKeydown);
