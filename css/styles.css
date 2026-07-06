@@ -39,6 +39,7 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+   overscroll-behavior-y: none;
 }
 
 /* One-screen-per-page app-like experience, modeled directly on the
