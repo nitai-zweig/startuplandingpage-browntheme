@@ -122,22 +122,63 @@
     }
   }
 
-  var touchStartY = null;
-  function onTouchStart(e) {
-    touchStartY = e.touches[0].clientY;
-  }
-  function onTouchEnd(e) {
-    if (touchStartY === null || isAnimating) return;
-    var dy = touchStartY - e.changedTouches[0].clientY;
-    touchStartY = null;
-    if (Math.abs(dy) < 60) return; // ignore small taps/drags
-    if (dy > 0) goTo(current + 1);
-    else goTo(current - 1);
-  }
+// A downward drag at the top of the page is ambiguous to the browser:
+    // it's both "go to the previous page" (our gesture) and the trigger
+    // for native pull-to-refresh, since #pager never scrolls natively and
+    // so the browser sees an overscroll. Left alone, the browser wins and
+    // refreshing the tab eats the gesture before onTouchEnd ever sees it —
+    // scrolling up becomes impossible. The fix: as soon as a touch's
+    // movement is clearly more vertical than horizontal, preventDefault on
+    // every touchmove for that gesture. That suppresses the browser's own
+    // scroll/refresh handling for it entirely, which is correct here
+    // because the pager already owns 100% of vertical navigation — there
+    // is no legitimate vertical native-scroll case left to preserve.
+    // Horizontal drags (the card carousels' swipe) are left untouched so
+    // they keep scrolling normally.
+    var touchStartX = null;
+    var touchStartY = null;
+    var touchDirection = null; // 'vertical' | 'horizontal' | null
+
+    function onTouchStart(e) {
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+          touchDirection = null;
+    }
+
+    function onTouchMove(e) {
+          if (touchStartY === null) return;
+          var t = e.touches[0];
+          var dx = t.clientX - touchStartX;
+          var dy = t.clientY - touchStartY;
+
+          if (touchDirection === null) {
+                  if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+                  touchDirection = Math.abs(dy) > Math.abs(dx) ? "vertical" : "horizontal";
+          }
+
+          if (touchDirection === "vertical" && e.cancelable) {
+                  e.preventDefault();
+          }
+    }
+
+    function onTouchEnd(e) {
+          var direction = touchDirection;
+          var startY = touchStartY;
+          touchStartX = null;
+          touchStartY = null;
+          touchDirection = null;
+
+          if (startY === null || isAnimating || direction !== "vertical") return;
+          var dy = startY - e.changedTouches[0].clientY;
+          if (Math.abs(dy) < 60) return; // ignore small taps/drags
+          if (dy > 0) goTo(current + 1);
+          else goTo(current - 1);
+    }
 
   window.addEventListener("wheel", onWheel, { passive: false });
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("touchstart", onTouchStart, { passive: true });
+  window.addEventListener("touchmove", onTouchMove, { passive: false });
   window.addEventListener("touchend", onTouchEnd, { passive: true });
   window.addEventListener("resize", function () {
     vh = window.innerHeight;
