@@ -612,21 +612,79 @@ a {
   height: 10rem;
 }
 
-/* Below a certain width, columns get too narrow to read comfortably —
-   fall back to fewer columns and let that one page scroll internally
-   rather than reintroducing horizontal scroll. */
+/* Below a certain width, a wrapping/stacked grid would make a card
+   page taller than one screen (the pager treats each page as exactly
+   one viewport). Instead, each row becomes a single-row horizontal
+   swipe carousel — one card's worth of height, any number of cards
+   wide — so every page still fits one mobile screen without needing
+   internal scroll (which is unreachable anyway: the pager's touch
+   handler treats any vertical drag as a page-change gesture). */
 @media (max-width: 700px) {
-  .grid-row-5 {
-    grid-template-columns: repeat(2, 1fr);
-  }
+     .grid-row-5,
+     .grid-row-3 {
+            display: flex;
+            grid-template-columns: none;
+            max-width: none;
+            overflow-x: auto;
+            overflow-y: visible;
+            margin: 0 -1.5rem;
+            padding: 0 1.5rem 0.5rem;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+     }
 
-  .grid-row-3 {
-    grid-template-columns: 1fr;
-  }
+     .grid-row-5 .card,
+     .grid-row-3 .card {
+            flex: 0 0 78%;
+            scroll-snap-align: start;
+     }
 
-  .flow-safe {
-    overflow-y: auto;
-  }
+     .flow-safe {
+            overflow-y: visible;
+     }
+
+     /* Hero: on mobile the copy and art stack into two grid rows: by
+        default CSS grid stretches auto rows to fill a tall container,
+        which shoved the (now much smaller) hero art way down the page
+        with a big empty gap. Centering the row group instead keeps it
+        compact, and shrinking the art itself is what lets hero copy +
+        art fit in one screen instead of needing internal scroll. */
+     .hero {
+            gap: 1.25rem;
+            align-content: center;
+     }
+
+     .hero h1 {
+            font-size: 1.85rem;
+            line-height: 1.1;
+     }
+
+     .hero p.lead {
+            margin-top: 0.75rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+     }
+
+     .hero-actions {
+            margin-top: 1.25rem;
+            gap: 0.6rem;
+     }
+
+     .hero-actions .btn {
+            height: 2.5rem;
+            padding-left: 1.1rem;
+            padding-right: 1.1rem;
+            font-size: 0.68rem;
+     }
+
+     .hero-art {
+            max-width: 11rem;
+            height: min(18vh, 9rem);
+     }
+
+     .badge-hero {
+            margin-bottom: 1rem;
+     }
 }
 
 .card {
