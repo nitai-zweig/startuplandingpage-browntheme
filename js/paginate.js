@@ -85,12 +85,12 @@
   // running total crosses the threshold. The accumulator resets after
   // any pause between events, so unrelated later scrolls don't inherit
   // leftover total from a previous gesture.
-  // Bumped up from 55: at 55, a single notch of a plain mouse wheel (which
-  // typically reports a deltaY around 100) blew straight through the
-  // threshold and jumped a page on the lightest possible input, which read
-  // as way too aggressive/twitchy on desktop. This requires a more
-  // deliberate scroll or wheel turn before committing to a page jump.
-  var WHEEL_THRESHOLD = 90;
+  // Bumped up from 55, then again from 90: even at 90 a single moderate
+  // wheel/trackpad flick was still enough to blow through the threshold
+  // and jump a page, which still read as too aggressive/violent on
+  // desktop. This requires a clearly deliberate scroll before committing
+  // to a page jump.
+  var WHEEL_THRESHOLD = 160;
   var WHEEL_GESTURE_GAP_MS = 160;
   var wheelAccum = 0;
   var lastWheelAt = 0;
@@ -175,14 +175,6 @@
     var dy = t.clientY - touchStartY;
 
     if (touchDirection === null) {
-      // Wait for enough movement to tell a swipe from a tap, and to
-      // tell vertical intent from horizontal before locking a direction.
-      // Tightened from 10 to 6: every pixel spent undecided here is a
-      // pixel the browser gets to process without preventDefault, which
-      // is exactly the head start a native overscroll gesture (e.g. a
-      // refresh-style bounce on the last page) needs to kick in before we
-      // commit to owning the gesture ourselves. Locking a hair sooner
-      // closes most of that gap without changing how swipes feel.
       if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
       touchDirection = Math.abs(dy) > Math.abs(dx) ? "vertical" : "horizontal";
       if (touchDirection === "vertical") {
